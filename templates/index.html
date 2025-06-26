@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <title>फूल या खरपतवार?</title>
+  <style>
+    body {font-family: sans-serif; max-width: 400px; margin: 30px auto;}
+    h1 {text-align:center;}
+    form {display:flex; flex-direction:column; gap:10px;}
+    input, button {padding:8px; border-radius:4px; border:1px solid #ccc;}
+    button {cursor:pointer;}
+    .result {margin-top:15px; font-weight:bold; text-align:center;}
+  </style>
+</head>
+<body>
+  <h1>🌼 फूल या खरपतवार? 🌿</h1>
+
+  <form action="/" method="POST">
+    <label>रंग लिखें (हरा / लाल / पीला):</label>
+    <input type="text" name="color" required>
+
+    <label>आकार (1 से 10):</label>
+    <input type="number" name="size" min="1" max="10" required>
+
+    <button type="submit">पहचानो</button>
+  </form>
+
+  {% if result %}
+    <div class="result">{{ result }}</div>
+  {% endif %}
+</body>
+</html>
