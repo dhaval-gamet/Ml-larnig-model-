@@ -1,40 +1,79 @@
-from flask import Flask, render_template, request
+# app.py
+# ----------------------------
+# Flask + ML Model + HTML UI + JSON API
+# ----------------------------
+from flask import Flask, request, jsonify, render_template
 import pickle
+import os
 
 app = Flask(__name__)
 
-# 🔹  मॉडल लोड करें
-with open("flower_model.pkl", "rb") as f:
+# ---------- 1. मॉडल लोड ----------
+MODEL_PATH = "flower_model.pkl"
+with open(MODEL_PATH, "rb") as f:
     model = pickle.load(f)
 
-# 🔹  कलर-नाम को नम्बर में बदलने वाला फ़ंक्शन
-def color_to_number(name):
-    name = name.strip().lower()
-    mapping = {"हरा": 0, "लाल": 1, "पीला": 2}
-    return mapping.get(name, -1)
+# ---------- 2. हेल्पर : रंग को नम्बर में बदलें ----------
+COLOR_MAP = {"हरा": 0, "लाल": 1, "पीला": 2}
+def color_to_number(color_name: str) -> int:
+    return COLOR_MAP.get(color_name.strip().lower(), -1)
 
-# 🔹  होम पेज (GET) + प्रिडिक्शन (POST)
+# ---------- 3. HTML होमपेज (GET) + फ़ॉर्म प्रिडिक्शन (POST) ----------
 @app.route("/", methods=["GET", "POST"])
 def index():
-    prediction_text = None
+    result = None
     if request.method == "POST":
         color = request.form.get("color", "")
         size  = request.form.get("size", "")
         try:
-            color_num = color_to_number(color)
-            size_int  = int(size)
-
-            if color_num == -1 or not (1 <= size_int <= 10):
-                prediction_text = "⚠️ सही रंग (हरा/लाल/पीला) व साइज (1-10) दें!"
+            color_val = color_to_number(color)
+            size_val  = int(size)
+            if color_val == -1 or not 1 <= size_val <= 10:
+                result = "⚠️ सही रंग (हरा/लाल/पीला) व आकार (1-10) दें!"
             else:
-                pred = model.predict([[color_num, size_int]])[0]
-                prediction_text = "🌸 यह फूल है!" if pred == 1 else "🌿 यह खरपतवार है!"
-        except:
-            prediction_text = "⚠️ इनपुट फ़ॉर्मेट गलत है!"
+                pred = model.predict([[color_val, size_val]])[0]
+                result = "🌸 यह फूल है!" if pred == 1 else "🌿 यह खरपतवार है!"
+        except Exception:
+            result = "⚠️ इनपुट फ़ॉर्मेट गलत है!"
+    return render_template("index.html", result=result)
 
-    return render_template("index.html", result=prediction_text)
+# ---------- 4. JSON API ---------- 
+#    POST /predict
+#    Body: { "color": "हरा", "size": 5 }
+#    Response: { "prediction": "फूल है!" }
+@app.route("/predict", methods=["POST"])
+def api_predict():
+    if not request.is_json:
+        return jsonify({"error": "JSON body expected"}), 415
 
-# 🔹  Replit/Render के लिए पोर्ट सेट-अप
+    data = request.get_json(silent=True) or {}
+    color = data.get("color")
+    size  = data.get("size")
+
+    # बेसिक वैलिडेशन
+    if color is None or size is None:
+        return jsonify({"error": "Both 'color' and 'size' needed"}), 400
+
+    color_val = color_to_number(color)
+    if color_val == -1:
+        return jsonify({"error": "Allowed colors: हरा, लाल, पीला"}), 400
+    try:
+        size_val = int(size)
+    except (TypeError, ValueError):
+        return jsonify({"error": "'size' must be integer"}), 400
+    if not 1 <= size_val <= 10:
+        return jsonify({"error": "size must be 1-10"}), 400
+
+    # प्रिडिक्शन
+    try:
+        pred = model.predict([[color_val, size_val]])[0]
+        label = "फूल है!" if pred == 1 else "खरपतवार है!"
+        return jsonify({"prediction": label})
+    except Exception as e:
+        # फ़ॉलबैक – कोई अनपेक्षित त्रुटि
+        return jsonify({"error": str(e)}), 500
+
+# ---------- 5. एंट्री-पॉइंट ----------
 if __name__ == "__main__":
-    import os
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+    port = int(os.getenv("PORT", 5000))   # Render PORT env var
+    app.run(host="0.0.0.0", port=port, debug=True)
